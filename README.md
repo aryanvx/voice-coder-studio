@@ -1,13 +1,13 @@
 # **Voice-Controlled Coding Assistant**
 
-This is my take on reimagining how we write code — ditching the keyboard (mostly) and letting your voice do the heavy lifting. Think VS Code meets GitHub Codespaces meets AI that actually listens to you. The goal here is a clean, dark, developer-friendly space with some bright electric blue/purple highlights so you know when the AI is paying attention.
+This is my take on reimagining how we write code—ditching the keyboard (mostly) and letting your voice do the heavy lifting. Think VS Code meets GitHub Codespaces meets AI that actually listens to you. The goal here is a clean, dark, developer-friendly space with some bright electric blue/purple highlights so you know when the AI is paying attention.
 
 For this first version, I kept it to the essentials:
 
 - A landing page that explains what’s going on
 - A main coding interface with an editor that feels familiar if you’ve ever touched VS Code
 - Voice recording controls so you can talk to your code
-- Real-time transcription so you can see exactly what you just said (and catch when it misunderstood you)
+- Real-time transcription so you can see exactly what you just said (and catch when it misunderstands you)
 - Mock AI code generation to make the whole thing feel alive
 - A file navigation sidebar so you can jump between files without touching a mouse
 - A command history panel so you can look back and see how you got here
