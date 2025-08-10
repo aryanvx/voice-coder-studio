@@ -18,7 +18,7 @@ The idea is to get the vibe right first — smooth animations, pulsing indicator
 If you want to run it:
 
   1. Clone this repo
-  2. Open ```sh index.html``` in your browser
+  2. Open ```index.html``` in your browser
   3. Start talking to your editor
 
 **This is just the start.**
