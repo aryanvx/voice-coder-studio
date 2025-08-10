@@ -1,73 +1,31 @@
-# Welcome to your Lovable project
+**Voice-Controlled Coding Assistant**
 
-## Project info
+This is my take on reimagining how we write code — ditching the keyboard (mostly) and letting your voice do the heavy lifting. Think VS Code meets GitHub Codespaces meets AI that actually listens to you. The goal here is a clean, dark, developer-friendly space with some bright electric blue/purple highlights so you know when the AI is paying attention.
 
-**URL**: https://lovable.dev/projects/7f56d8ea-a998-42cd-8880-266c427982eb
+For this first version, I kept it to the essentials:
 
-## How can I edit this code?
+A landing page that explains what’s going on
 
-There are several ways of editing your application.
+A main coding interface with an editor that feels familiar if you’ve ever touched VS Code
 
-**Use Lovable**
+Voice recording controls so you can talk to your code
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/7f56d8ea-a998-42cd-8880-266c427982eb) and start prompting.
+Real-time transcription so you can see exactly what you just said (and catch when it misunderstood you)
 
-Changes made via Lovable will be committed automatically to this repo.
+Mock AI code generation to make the whole thing feel alive
 
-**Use your preferred IDE**
+A file navigation sidebar so you can jump between files without touching a mouse
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+A command history panel so you can look back and see how you got here
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+The idea is to get the vibe right first — smooth animations, pulsing indicators when it’s listening, a layout that feels like an actual dev tool and not a clunky prototype. From here, it’s not a huge leap to plug in real AI models, adaptive syntax learning, and proper debugging commands.
 
-Follow these steps:
+If you want to run it:
 
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
+Clone this repo
 
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
+Open index.html in your browser
 
-# Step 3: Install the necessary dependencies.
-npm i
+Start talking to your editor
 
-# Step 4: Start the development server with auto-reloading and an instant preview.
-npm run dev
-```
-
-**Edit a file directly in GitHub**
-
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
-
-**Use GitHub Codespaces**
-
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
-
-## What technologies are used for this project?
-
-This project is built with:
-
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
-
-## How can I deploy this project?
-
-Simply open [Lovable](https://lovable.dev/projects/7f56d8ea-a998-42cd-8880-266c427982eb) and click on Share -> Publish.
-
-## Can I connect a custom domain to my Lovable project?
-
-Yes, you can!
-
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
-
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/tips-tricks/custom-domain#step-by-step-guide)
+This is just the start — the plan is to turn this into a full AI-powered development environment that can understand your coding style, explain your bugs, and maybe even argue with you about why your variable names are terrible.
