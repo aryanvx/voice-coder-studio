@@ -1,4 +1,4 @@
-**Voice-Controlled Coding Assistant**
+***Voice-Controlled Coding Assistant***
 
 This is my take on reimagining how we write code — ditching the keyboard (mostly) and letting your voice do the heavy lifting. Think VS Code meets GitHub Codespaces meets AI that actually listens to you. The goal here is a clean, dark, developer-friendly space with some bright electric blue/purple highlights so you know when the AI is paying attention.
 
