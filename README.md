@@ -12,7 +12,7 @@ For this first version, I kept it to the essentials:
 - A file navigation sidebar so you can jump between files without touching a mouse
 - A command history panel so you can look back and see how you got here
 
-The idea is to get the vibe right first — smooth animations, pulsing indicators when it’s listening, a layout that feels like an actual dev tool and not a clunky prototype. From here, it’s not a huge leap to plug in real AI models, adaptive syntax learning, and proper debugging commands.
+The idea is to get the vibe right first with smooth animations, pulsing indicators when it’s listening, a layout that feels like an actual dev tool and not a clunky prototype. From here, it’s not a huge leap to plug in real AI models, adaptive syntax learning, and proper debugging commands.
 
 
 If you want to run it:
