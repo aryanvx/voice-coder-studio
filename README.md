@@ -1,4 +1,4 @@
-***Voice-Controlled Coding Assistant***
+# **Voice-Controlled Coding Assistant**
 
 This is my take on reimagining how we write code — ditching the keyboard (mostly) and letting your voice do the heavy lifting. Think VS Code meets GitHub Codespaces meets AI that actually listens to you. The goal here is a clean, dark, developer-friendly space with some bright electric blue/purple highlights so you know when the AI is paying attention.
 
@@ -19,6 +19,6 @@ If you want to run it:
   2. Open index.html in your browser
   3. Start talking to your editor
 
-This is just the start.
+**This is just the start.**
 
 T plan is to turn this into a full AI-powered development environment that can understand your coding style, explain your bugs, and maybe even argue with you about why your variable names are terrible.
