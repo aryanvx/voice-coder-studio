@@ -15,11 +15,34 @@ For this first version, I kept it to the essentials:
 The idea is to get the vibe right first with smooth animations, pulsing indicators when it’s listening, a layout that feels like an actual dev tool and not a clunky prototype. From here, it’s not a huge leap to plug in real AI models, adaptive syntax learning, and proper debugging commands.
 
 
-If you want to run it:
+## Getting Started
 
-  1. Clone this repo
-  2. Open ```index.html``` in your browser
-  3. Start talking to your editor
+### Prerequisites
+- Node.js (v18 or higher)
+- npm (comes with Node.js)
+
+### Installation and Setup
+
+1. Clone this repo:
+   ```bash
+   git clone https://github.com/aryanvx/voice-coder-studio.git
+   cd voice-coder-studio
+   ```
+
+2. Install dependencies:
+   ```bash
+   npm install
+   ```
+
+3. Start the development server:
+   ```bash
+   npm run dev
+   ```
+
+4. Open your browser and navigate to:
+   - http://localhost:5173 (or the URL shown in your terminal)
+   
+Now you can start talking to your editor!
 
 **This is just the start.**
 
