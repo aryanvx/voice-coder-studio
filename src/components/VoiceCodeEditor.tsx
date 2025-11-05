@@ -45,7 +45,7 @@ if __name__ == "__main__":
     language: "python"
   });
 
-  const [files] = useState<CodeFile[]>([
+  const [files, setFiles] = useState<CodeFile[]>([
     { name: "main.py", content: currentFile.content, language: "python" },
     { name: "utils.js", content: "// Utility functions", language: "javascript" },
     { name: "style.css", content: "/* Styles */", language: "css" }
@@ -58,21 +58,315 @@ if __name__ == "__main__":
   ]);
 
   const [cursorPosition, setCursorPosition] = useState({ line: 1, column: 1 });
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const gutterRef = useRef<HTMLDivElement | null>(null);
+  const [llmEnabled] = useState<boolean>(Boolean((import.meta as any).env?.VITE_OPENAI_API_KEY));
+  const [llmStatus, setLlmStatus] = useState<'idle' | 'loading' | 'error'>('idle');
+  const [llmSuggestion, setLlmSuggestion] = useState<string | null>(null);
+  const [showSuggestionPreview, setShowSuggestionPreview] = useState(false);
+
+  const handleContentChange = (value: string) => {
+    setCurrentFile(prev => ({ ...prev, content: value }));
+    // persist into files array so switching files retains edits
+    setFiles(prev => prev.map(f => f.name === currentFile.name ? { ...f, content: value } : f));
+  };
+
+  const updateCursorPositionFromSelection = () => {
+    const el = textareaRef.current;
+    if (!el) return;
+    const pos = el.selectionStart ?? 0;
+    const before = el.value.slice(0, pos);
+    const lines = before.split('\n');
+    const line = lines.length;
+    const column = lines[lines.length - 1].length + 1;
+    setCursorPosition({ line, column });
+  };
+
+  // Helper: convert line/column to string index
+  function getIndexFromLineColumn(content: string, line: number, column: number) {
+    const lines = content.split('\n');
+    const clampedLine = Math.max(1, Math.min(line, lines.length));
+    const clampedColumn = Math.max(1, column);
+    let idx = 0;
+    for (let i = 0; i < clampedLine - 1; i++) {
+      idx += lines[i].length + 1; // include newline
+    }
+    idx += Math.min(clampedColumn - 1, lines[clampedLine - 1].length);
+    return idx;
+  }
+
+  // Execute parsed voice commands
+  // Convert common spoken number words to digits (basic)
+  function normalizeSpokenNumbers(input: string) {
+    const smallNums: Record<string, number> = {
+      zero:0, one:1, two:2, three:3, four:4, five:5, six:6, seven:7, eight:8, nine:9, ten:10,
+      eleven:11, twelve:12, thirteen:13, fourteen:14, fifteen:15, sixteen:16, seventeen:17, eighteen:18, nineteen:19, twenty:20,
+      thirty:30, forty:40, fifty:50, sixty:60, seventy:70, eighty:80, ninety:90
+    };
+    return input.replace(/\b(line)\s+([a-z-]+)\b/gi, (m, p1, p2) => {
+      const parts = p2.split(/[-\s]/);
+      let num = 0;
+      parts.forEach(part => {
+        const val = smallNums[part.toLowerCase()];
+        if (val !== undefined) num += val;
+        else if (!isNaN(Number(part))) num += Number(part);
+      });
+      if (num > 0) return `${p1} ${num}`;
+      return m;
+    });
+  }
+
+  async function processVoiceCommand(text: string) {
+    text = normalizeSpokenNumbers(text);
+    const lower = text.toLowerCase();
+
+    // go to line N
+    const gotoMatch = lower.match(/(?:go to|goto|go)\s+line\s+(\d+)/);
+    if (gotoMatch) {
+      const line = parseInt(gotoMatch[1], 10);
+      const column = 1;
+      setCursorPosition({ line, column });
+      // set textarea caret to start of that line
+      setTimeout(() => {
+        const el = textareaRef.current;
+        if (!el) return;
+        const idx = getIndexFromLineColumn(currentFile.content, line, column);
+        el.focus();
+        el.selectionStart = el.selectionEnd = idx;
+        handleEditorScroll();
+      }, 50);
+      setVoiceState(prev => ({ ...prev, isProcessing: false, transcript: text }));
+      return;
+    }
+
+    // open <filename>
+    const openMatch = lower.match(/(?:open|show|open file)\s+(.+\.[a-zA-Z0-9_\-]+)/);
+    if (openMatch) {
+      const filename = openMatch[1].trim();
+      const file = files.find(f => f.name.toLowerCase() === filename.toLowerCase());
+      if (file) {
+        setCurrentFile(file);
+        setVoiceState(prev => ({ ...prev, isProcessing: false, transcript: text }));
+        // place cursor at start
+        setTimeout(() => {
+          const el = textareaRef.current;
+          if (!el) return;
+          el.focus();
+          el.selectionStart = el.selectionEnd = 0;
+          updateCursorPositionFromSelection();
+        }, 50);
+      } else {
+        // not found
+        setVoiceState(prev => ({ ...prev, isProcessing: false, transcript: `File ${filename} not found` }));
+      }
+      return;
+    }
+
+    // create function <name>
+    // write/create/implement function with optional params
+    const writeMatch = text.match(/(?:write|create|implement|add)\s+(?:the\s+)?(?:function|fn|method)\s+(?:called\s+)?([a-zA-Z_][a-zA-Z0-9_]*)\b(?:[\s,]+(?:with parameters|with parameter|that takes|that takes a|taking)\s+(.+))?/i);
+    if (writeMatch) {
+      const fnName = writeMatch[1];
+      const paramsPhrase = writeMatch[2] || "";
+      // parse params by splitting on 'and', ',' or 'or'
+      let params: string[] = [];
+      if (paramsPhrase) {
+        params = paramsPhrase.split(/\band\b|,|\bor\b/gi).map(s => s.trim()).filter(Boolean)
+          .map(p => p.replace(/[^a-zA-Z0-9_]/g, ''))
+          .filter(Boolean);
+      }
+
+      const lang = currentFile.language || 'javascript';
+
+      // Try LLM generation if API key available
+      let snippet: string | null = null;
+      try {
+        const key = (import.meta as any).env?.VITE_OPENAI_API_KEY;
+        if (key) {
+          // ask LLM but show preview before inserting
+          setLlmStatus('loading');
+          const generated = await callLLMGenerateFunction(lang, fnName, params, currentFile.content);
+          if (generated) {
+            setLlmSuggestion(generated);
+            setShowSuggestionPreview(true);
+            setLlmStatus('idle');
+            // leave currentFile unchanged until user accepts
+            setVoiceState(prev => ({ ...prev, isProcessing: false, transcript: text }));
+            return;
+          }
+        }
+      } catch (err) {
+        console.error('LLM generation failed', err);
+      }
+
+      // fallback: generate locally and insert at caret
+      const finalSnippet = generateFunctionSnippet(lang, fnName, params);
+      setCurrentFile(prev => {
+        const idx = textareaRef.current ? textareaRef.current.selectionStart ?? prev.content.length : prev.content.length;
+        const newContent = prev.content.slice(0, idx) + finalSnippet + prev.content.slice(idx);
+        setFiles(fprev => fprev.map(f => f.name === prev.name ? { ...f, content: newContent } : f));
+        setTimeout(() => {
+          if (textareaRef.current) {
+            const textarea = textareaRef.current;
+            textarea.focus();
+            textarea.selectionStart = textarea.selectionEnd = idx + Math.max(0, finalSnippet.length -1);
+          }
+          updateCursorPositionFromSelection();
+        }, 50);
+        setVoiceState(prevState => ({ ...prevState, isProcessing: false, transcript: text }));
+        return { ...prev, content: newContent };
+      });
+      return;
+    }
+
+    // default: echo transcript
+    setVoiceState(prev => ({ ...prev, isProcessing: false, transcript: text }));
+  }
+
+  // Generate a function snippet for a given language
+  function generateFunctionSnippet(lang: string, name: string, params: string[]) {
+    const p = params.join(', ');
+    if (lang === 'python') {
+      return `def ${name}(${p}):\n    """Auto-generated function ${name}"""\n    # TODO: implement\n    pass\n`;
+    }
+    // default to JavaScript
+    return `function ${name}(${p}) {\n  // TODO: implement ${name}\n}\n`;
+  }
+
+  // Call LLM (OpenAI) to generate a function implementation.
+  // Requires VITE_OPENAI_API_KEY to be set in environment.
+  async function callLLMGenerateFunction(lang: string, name: string, params: string[], fileContext: string) {
+    const key = (import.meta as any).env?.VITE_OPENAI_API_KEY;
+    if (!key) return null;
+
+    const paramList = params.join(', ');
+    const system = `You are a helpful assistant that writes ${lang} code snippets. Return only the code for the requested function. Do not include explanatory text.`;
+    const user = `Implement a ${lang} function named ${name} with parameters: ${paramList}. Use the following file context for style and imports/context:\n\n${fileContext}\n\nReturn only the function code.`;
+
+    try {
+      const res = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${key}`
+        },
+        body: JSON.stringify({
+          model: 'gpt-4',
+          messages: [
+            { role: 'system', content: system },
+            { role: 'user', content: user }
+          ],
+          max_tokens: 800,
+          temperature: 0.2
+        })
+      });
+      if (!res.ok) {
+        console.error('OpenAI API error', await res.text());
+        return null;
+      }
+      const data = await res.json();
+      const content = data?.choices?.[0]?.message?.content;
+      if (!content) return null;
+      // Try to extract code block if present
+      const codeMatch = content.match(/```[a-zA-Z]*\n([\s\S]*?)```/);
+      if (codeMatch) return codeMatch[1].trim() + '\n';
+      return content.trim() + '\n';
+    } catch (err) {
+      console.error('LLM call failed', err);
+      return null;
+    }
+  }
+
+  // Keep gutter scroll in sync with textarea scroll
+  const handleEditorScroll = () => {
+    const el = textareaRef.current;
+    const gutter = gutterRef.current;
+    if (!el || !gutter) return;
+    gutter.scrollTop = el.scrollTop;
+  };
+
+  // When content or file changes, ensure cursor stays valid and gutter updates
+  useEffect(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    // clamp cursor to available content
+    const totalLines = currentFile.content.split('\n').length;
+    setCursorPosition(prev => ({
+      line: Math.min(prev.line, totalLines),
+      column: prev.column
+    }));
+    // ensure gutter scroll matches
+    handleEditorScroll();
+  }, [currentFile.content]);
+
+  // Accept or reject LLM suggestion
+  const acceptLlmSuggestion = () => {
+    if (!llmSuggestion) return;
+    const snippet = llmSuggestion;
+    setCurrentFile(prev => {
+      const idx = textareaRef.current ? textareaRef.current.selectionStart ?? prev.content.length : prev.content.length;
+      const newContent = prev.content.slice(0, idx) + snippet + prev.content.slice(idx);
+      setFiles(fprev => fprev.map(f => f.name === prev.name ? { ...f, content: newContent } : f));
+      setTimeout(() => {
+        if (textareaRef.current) {
+          const textarea = textareaRef.current;
+          textarea.focus();
+          textarea.selectionStart = textarea.selectionEnd = idx + Math.max(0, snippet.length - 1);
+        }
+        updateCursorPositionFromSelection();
+      }, 50);
+      return { ...prev, content: newContent };
+    });
+    setLlmSuggestion(null);
+    setShowSuggestionPreview(false);
+    setLlmStatus('idle');
+  };
+
+  const rejectLlmSuggestion = () => {
+    setLlmSuggestion(null);
+    setShowSuggestionPreview(false);
+    setLlmStatus('idle');
+  };
+
+  // Web Speech API integration
+  const recognitionRef = useRef<any>(null);
+
+  useEffect(() => {
+    if (!('webkitSpeechRecognition' in window || 'SpeechRecognition' in window)) {
+      return;
+    }
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    recognitionRef.current = new SpeechRecognition();
+    recognitionRef.current.continuous = false;
+    recognitionRef.current.interimResults = false;
+    recognitionRef.current.lang = 'en-US';
+
+    recognitionRef.current.onresult = (event: any) => {
+      const transcript = event.results[0][0].transcript;
+      // Process spoken command
+      setVoiceState(prev => ({ ...prev, isListening: false, isProcessing: true }));
+      setCommandHistory(prev => [...prev, transcript]);
+      processVoiceCommand(transcript.trim());
+    };
+    recognitionRef.current.onerror = (event: any) => {
+      setVoiceState(prev => ({ ...prev, isListening: false, isProcessing: false, transcript: "" }));
+    };
+    recognitionRef.current.onend = () => {
+      setVoiceState(prev => ({ ...prev, isListening: false, isProcessing: false }));
+    };
+  }, []);
 
   const toggleVoiceListening = () => {
+    if (!recognitionRef.current) {
+      alert("Speech recognition is not supported in this browser.");
+      return;
+    }
     if (voiceState.isListening) {
+      recognitionRef.current.stop();
       setVoiceState(prev => ({ ...prev, isListening: false, isProcessing: true }));
-      // Simulate processing
-      setTimeout(() => {
-        setVoiceState(prev => ({ 
-          ...prev, 
-          isProcessing: false, 
-          transcript: "Create a new function called 'process_data' that takes a list parameter"
-        }));
-        setCommandHistory(prev => [...prev, "Create function process_data with list parameter"]);
-      }, 2000);
     } else {
-      setVoiceState(prev => ({ ...prev, isListening: true, transcript: "" }));
+      setVoiceState(prev => ({ ...prev, isListening: true, isProcessing: false, transcript: "" }));
+      recognitionRef.current.start();
     }
   };
 
@@ -113,7 +407,14 @@ if __name__ == "__main__":
                     ? "bg-primary/20 text-primary" 
                     : "hover:bg-muted text-muted-foreground"
                 )}
-                onClick={() => setCurrentFile(file)}
+                onClick={() => {
+                  // save current edits, then open selected file
+                  setFiles(prev => prev.map(f => f.name === currentFile.name ? { ...f, content: currentFile.content } : f));
+                  const found = files.find(f => f.name === file.name);
+                  if (found) setCurrentFile(found);
+                  // reset cursor position
+                  setTimeout(() => updateCursorPositionFromSelection(), 20);
+                }}
               >
                 <FileText className="w-4 h-4" />
                 <span className="text-sm">{file.name}</span>
@@ -157,23 +458,73 @@ if __name__ == "__main__":
           </div>
         </div>
 
-        {/* Code Editor */}
+        {/* Code Editor (editable) */}
         <div className="flex-1 bg-code-bg p-4 font-mono text-sm overflow-auto">
-          <pre className="whitespace-pre-wrap leading-relaxed">
-            {currentFile.content.split('\n').map((line, index) => (
-              <div key={index} className="flex items-start">
-                <span className="text-muted-foreground w-12 text-right pr-4 select-none">
-                  {index + 1}
-                </span>
-                <span className="flex-1">
-                  {line || '\u00A0'}
-                  {index === cursorPosition.line - 1 && (
-                    <span className="inline-block w-0.5 h-5 bg-primary ml-1 animate-blink" />
-                  )}
-                </span>
+          <div className="flex h-full">
+            {/* Line numbers gutter */}
+            <div
+              ref={gutterRef}
+              className="w-12 pr-3 select-none text-muted-foreground text-right tabular-nums overflow-auto"
+              style={{
+                // Ensure the gutter uses same font and metrics as editor
+                fontFamily: 'JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, Monaco, "Roboto Mono", "Courier New", monospace'
+              }}
+            >
+              {currentFile.content.split('\n').map((_, i) => (
+                <div
+                  key={i}
+                  className={cn('min-h-[1.5rem] leading-6 flex items-center', i === cursorPosition.line - 1 && 'text-primary')}
+                >
+                  {i + 1}
+                </div>
+              ))}
+            </div>
+
+            {/* Editable textarea (fallback editor) */}
+            <div className="flex-1">
+              <textarea
+                ref={textareaRef}
+                value={currentFile.content}
+                onChange={(e) => handleContentChange(e.target.value)}
+                onKeyUp={updateCursorPositionFromSelection}
+                onClick={updateCursorPositionFromSelection}
+                onScroll={handleEditorScroll}
+                wrap="off"
+                style={{ fontFamily: 'JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, Monaco, "Roboto Mono", "Courier New", monospace' }}
+                className="flex-1 resize-none bg-transparent outline-none focus:outline-none text-sm font-mono leading-6 h-full p-0 m-0 whitespace-pre"
+                spellCheck={false}
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* LLM status & preview (if any) */}
+        <div className="px-4 pb-2">
+          <div className="flex items-center justify-between mb-2">
+            <div className="text-xs text-muted-foreground">LLM:</div>
+            <div className="text-xs">
+              {llmEnabled ? (
+                <span className="text-green-400">Enabled</span>
+              ) : (
+                <span className="text-muted-foreground">Disabled</span>
+              )}
+              {llmStatus === 'loading' && <span className="ml-2 text-xs text-amber-400">Generating...</span>}
+              {llmStatus === 'error' && <span className="ml-2 text-xs text-red-400">Error</span>}
+            </div>
+          </div>
+
+          {showSuggestionPreview && llmSuggestion && (
+            <div className="bg-card border border-border rounded-md p-3 mb-3">
+              <div className="flex items-center justify-between mb-2">
+                <div className="text-sm font-medium">LLM Suggestion Preview</div>
+                <div className="flex gap-2">
+                  <Button size="sm" variant="ghost" onClick={rejectLlmSuggestion}>Reject</Button>
+                  <Button size="sm" onClick={acceptLlmSuggestion}>Accept</Button>
+                </div>
               </div>
-            ))}
-          </pre>
+              <pre className="text-sm overflow-auto max-h-48 bg-muted p-2 rounded text-xs"><code>{llmSuggestion}</code></pre>
+            </div>
+          )}
         </div>
 
         {/* Voice Control Panel */}

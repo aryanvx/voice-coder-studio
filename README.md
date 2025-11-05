@@ -44,6 +44,16 @@ The idea is to get the vibe right first with smooth animations, pulsing indicato
    
 Now you can start talking to your editor!
 
+### Optional: Enable LLM-based code generation
+
+If you want the editor to generate full function implementations using an LLM (OpenAI), create a `.env` file in the project root with:
+
+```bash
+VITE_OPENAI_API_KEY=sk-xxxxxxxxxxxxxxxx
+```
+
+Then restart the dev server. When enabled, the editor will show an "LLM: Enabled" indicator and preview any generated suggestion before you accept or reject it.
+
 **This is just the start.**
 
 The plan is to turn this into a full AI-powered development environment that can understand your coding style, explain your bugs, and maybe even argue with you about why your variable names are terrible (seriously considering this feature lol).
