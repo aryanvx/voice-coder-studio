@@ -60,15 +60,83 @@ if __name__ == "__main__":
   const [cursorPosition, setCursorPosition] = useState({ line: 1, column: 1 });
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const gutterRef = useRef<HTMLDivElement | null>(null);
-  const [llmEnabled] = useState<boolean>(Boolean((import.meta as any).env?.VITE_OPENAI_API_KEY));
+  const [llmEnabled, setLlmEnabled] = useState<boolean>(false);
   const [llmStatus, setLlmStatus] = useState<'idle' | 'loading' | 'error'>('idle');
   const [llmSuggestion, setLlmSuggestion] = useState<string | null>(null);
   const [showSuggestionPreview, setShowSuggestionPreview] = useState(false);
+  // Rename file UI state
+  const [isRenaming, setIsRenaming] = useState(false);
+  const [renameValue, setRenameValue] = useState(currentFile.name);
+  const [renameError, setRenameError] = useState<string | null>(null);
+  const renameInputRef = useRef<HTMLInputElement | null>(null);
+  // Auto-wrap toggle for long lines
+  const [autoWrap, setAutoWrap] = useState(false);
 
   const handleContentChange = (value: string) => {
     setCurrentFile(prev => ({ ...prev, content: value }));
     // persist into files array so switching files retains edits
     setFiles(prev => prev.map(f => f.name === currentFile.name ? { ...f, content: value } : f));
+  };
+
+  // keep rename input in sync when switching files
+  useEffect(() => {
+    setRenameValue(currentFile.name);
+    setRenameError(null);
+    setIsRenaming(false);
+  }, [currentFile.name]);
+
+  // Check server-side LLM proxy availability
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        const res = await fetch('/api/llm/health');
+        if (!mounted) return;
+        if (!res.ok) {
+          setLlmEnabled(false);
+          return;
+        }
+        const data = await res.json();
+        setLlmEnabled(Boolean(data?.enabled));
+      } catch (err) {
+        setLlmEnabled(false);
+      }
+    })();
+    return () => { mounted = false; };
+  }, []);
+
+  const startRename = () => {
+    setRenameValue(currentFile.name);
+    setRenameError(null);
+    setIsRenaming(true);
+    // focus shortly after render
+    setTimeout(() => renameInputRef.current?.focus(), 50);
+  };
+
+  const cancelRename = () => {
+    setIsRenaming(false);
+    setRenameValue(currentFile.name);
+    setRenameError(null);
+  };
+
+  const applyRename = () => {
+    const newName = (renameValue || "").trim();
+    if (!newName) {
+      setRenameError('Name cannot be empty');
+      return;
+    }
+    // Prevent duplicate file names (case-insensitive), except when it's the same file
+    const conflict = files.find(f => f.name.toLowerCase() === newName.toLowerCase() && f.name !== currentFile.name);
+    if (conflict) {
+      setRenameError('A file with that name already exists');
+      return;
+    }
+
+    // Update files array and currentFile
+    setFiles(prev => prev.map(f => f.name === currentFile.name ? { ...f, name: newName } : f));
+    setCurrentFile(prev => ({ ...prev, name: newName }));
+    setIsRenaming(false);
+    setRenameError(null);
   };
 
   const updateCursorPositionFromSelection = () => {
@@ -236,43 +304,22 @@ if __name__ == "__main__":
   // Call LLM (OpenAI) to generate a function implementation.
   // Requires VITE_OPENAI_API_KEY to be set in environment.
   async function callLLMGenerateFunction(lang: string, name: string, params: string[], fileContext: string) {
-    const key = (import.meta as any).env?.VITE_OPENAI_API_KEY;
-    if (!key) return null;
-
-    const paramList = params.join(', ');
-    const system = `You are a helpful assistant that writes ${lang} code snippets. Return only the code for the requested function. Do not include explanatory text.`;
-    const user = `Implement a ${lang} function named ${name} with parameters: ${paramList}. Use the following file context for style and imports/context:\n\n${fileContext}\n\nReturn only the function code.`;
-
+    // Call local server proxy which hides the API key
     try {
-      const res = await fetch('https://api.openai.com/v1/chat/completions', {
+      const res = await fetch('/api/llm/generate', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${key}`
-        },
-        body: JSON.stringify({
-          model: 'gpt-4',
-          messages: [
-            { role: 'system', content: system },
-            { role: 'user', content: user }
-          ],
-          max_tokens: 800,
-          temperature: 0.2
-        })
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ lang, name, params, fileContext })
       });
       if (!res.ok) {
-        console.error('OpenAI API error', await res.text());
+        console.error('LLM proxy error', await res.text());
         return null;
       }
       const data = await res.json();
-      const content = data?.choices?.[0]?.message?.content;
-      if (!content) return null;
-      // Try to extract code block if present
-      const codeMatch = content.match(/```[a-zA-Z]*\n([\s\S]*?)```/);
-      if (codeMatch) return codeMatch[1].trim() + '\n';
-      return content.trim() + '\n';
+      if (!data?.success) return data?.content ?? null;
+      return data.content;
     } catch (err) {
-      console.error('LLM call failed', err);
+      console.error('LLM proxy call failed', err);
       return null;
     }
   }
@@ -444,14 +491,40 @@ if __name__ == "__main__":
         {/* Top Bar */}
         <div className="h-12 bg-card border-b border-border flex items-center justify-between px-4">
           <div className="flex items-center gap-4">
-            <Badge variant="secondary" className="text-xs">
-              {currentFile.name}
-            </Badge>
+            {/* File name + rename UI */}
+            {isRenaming ? (
+              <div className="flex items-center gap-2">
+                <input
+                  ref={renameInputRef}
+                  value={renameValue}
+                  onChange={(e) => setRenameValue(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') applyRename();
+                    if (e.key === 'Escape') cancelRename();
+                  }}
+                  className="text-xs px-2 py-1 rounded border border-border bg-card"
+                  aria-label="Rename file"
+                />
+                <Button size="sm" onClick={applyRename}>Save</Button>
+                <Button size="sm" variant="ghost" onClick={cancelRename}>Cancel</Button>
+                {renameError && <div className="text-xs text-red-400 ml-2">{renameError}</div>}
+              </div>
+            ) : (
+              <div className="flex items-center gap-2">
+                <Badge variant="secondary" className="text-xs">
+                  {currentFile.name}
+                </Badge>
+                <Button size="sm" variant="ghost" onClick={startRename}>Rename</Button>
+              </div>
+            )}
             <div className="text-xs text-muted-foreground">
               Line {cursorPosition.line}, Column {cursorPosition.column}
             </div>
           </div>
           <div className="flex items-center gap-2">
+            <Button size="sm" variant={autoWrap ? "default" : "ghost"} onClick={() => setAutoWrap(a => !a)}>
+              {autoWrap ? 'Wrap: On' : 'Wrap: Off'}
+            </Button>
             <Button variant="ghost" size="sm">
               <Settings className="w-4 h-4" />
             </Button>
@@ -460,7 +533,7 @@ if __name__ == "__main__":
 
         {/* Code Editor (editable) */}
         <div className="flex-1 bg-code-bg p-4 font-mono text-sm overflow-auto">
-          <div className="flex h-full">
+          <div className="flex h-full min-w-0">
             {/* Line numbers gutter */}
             <div
               ref={gutterRef}
@@ -481,7 +554,7 @@ if __name__ == "__main__":
             </div>
 
             {/* Editable textarea (fallback editor) */}
-            <div className="flex-1">
+            <div className="flex-1 min-w-0">
               <textarea
                 ref={textareaRef}
                 value={currentFile.content}
@@ -489,9 +562,9 @@ if __name__ == "__main__":
                 onKeyUp={updateCursorPositionFromSelection}
                 onClick={updateCursorPositionFromSelection}
                 onScroll={handleEditorScroll}
-                wrap="off"
-                style={{ fontFamily: 'JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, Monaco, "Roboto Mono", "Courier New", monospace' }}
-                className="flex-1 resize-none bg-transparent outline-none focus:outline-none text-sm font-mono leading-6 h-full p-0 m-0 whitespace-pre"
+                wrap={autoWrap ? "soft" : "off"}
+                style={{ width: '100%', fontFamily: 'JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, Monaco, "Roboto Mono", "Courier New", monospace' }}
+                className={`w-full flex-1 resize-none bg-transparent outline-none focus:outline-none text-sm font-mono leading-6 h-full p-0 m-0 ${autoWrap ? 'whitespace-pre-wrap' : 'whitespace-pre'}`}
                 spellCheck={false}
               />
             </div>
