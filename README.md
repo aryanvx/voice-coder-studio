@@ -1,16 +1,25 @@
 # **Voice-Controlled Coding Assistant**
 
-This is my take on reimagining how we write code—ditching the keyboard (mostly) and letting your voice do the heavy lifting. Think VS Code meets GitHub Codespaces meets AI that actually listens to you. The goal here is a clean, dark, developer-friendly space with some bright electric blue/purple highlights so you know when the AI is paying attention.
+This is my take on reimagining how we write code: ditching the keyboard (mostly) and letting your voice do the heavy lifting. Think VS Code meets GitHub Codespaces meets AI that actually listens to you.
 
-For this first version, I kept it to the essentials:
+For this first version, I kept it relatively simple:
 
 - A landing page that explains what’s going on
 - A main coding interface with an editor that feels familiar if you’ve ever touched VS Code
-- Voice recording controls so you can talk to your code
-- Real-time transcription so you can see exactly what you just said (and catch when it misunderstands you)
-- Mock AI code generation to make the whole thing feel alive
-- A file navigation sidebar so you can jump between files without touching a mouse
-- A command history panel so you can look back and see how you got here
+- LLM status showing either enabled or disabled
+- File rename options
+- Toggle text wrap
+- Artifical Intelligence, what I call, smartness. This uses an API from OpenAI's Chat-GPT 5 model and you can either set it to "strict" or "smart", the difference being in how accurately it will execute your **actual** prompt. Strict will generate code based exactly on what you said. For instance, if you said "write a print statement that will print the final score", the output would look something like this:
+
+```
+print(finalScore)
+```
+
+If you set the smartness to "Smart", then the output would look like this given the same case:
+
+```
+print(f"The final score is {finalScore}")
+```
 
 The idea is to get the vibe right first with smooth animations, pulsing indicators when it’s listening, a layout that feels like an actual dev tool and not a clunky prototype. From here, it’s not a huge leap to plug in real AI models, adaptive syntax learning, and proper debugging commands.
 

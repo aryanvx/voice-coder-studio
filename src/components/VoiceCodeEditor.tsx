@@ -71,6 +71,8 @@ if __name__ == "__main__":
   const renameInputRef = useRef<HTMLInputElement | null>(null);
   // Auto-wrap toggle for long lines
   const [autoWrap, setAutoWrap] = useState(false);
+  // AI interpretation mode: 'strict' = follow command exactly, 'smart' = AI interprets intent
+  const [aiMode, setAiMode] = useState<'strict' | 'smart'>('smart');
 
   const handleContentChange = (value: string) => {
     setCurrentFile(prev => ({ ...prev, content: value }));
@@ -90,15 +92,20 @@ if __name__ == "__main__":
     let mounted = true;
     (async () => {
       try {
+        console.log('[Health] Checking LLM proxy availability...');
         const res = await fetch('/api/llm/health');
         if (!mounted) return;
         if (!res.ok) {
+          console.warn('[Health] Health check failed with status:', res.status);
           setLlmEnabled(false);
           return;
         }
         const data = await res.json();
+        console.log('[Health] Health check response:', data);
         setLlmEnabled(Boolean(data?.enabled));
+        console.log('[Health] LLM enabled set to:', Boolean(data?.enabled));
       } catch (err) {
+        console.error('[Health] Health check error:', err);
         setLlmEnabled(false);
       }
     })();
@@ -185,8 +192,10 @@ if __name__ == "__main__":
   }
 
   async function processVoiceCommand(text: string) {
+    console.log('[Voice] Processing command:', text);
     text = normalizeSpokenNumbers(text);
     const lower = text.toLowerCase();
+    console.log('[Voice] Normalized text:', text);
 
     // go to line N
     const gotoMatch = lower.match(/(?:go to|goto|go)\s+line\s+(\d+)/);
@@ -232,10 +241,15 @@ if __name__ == "__main__":
 
     // create function <name>
     // write/create/implement function with optional params
+    // Try exact-name form first: "write a function called foo with parameters x and y"
     const writeMatch = text.match(/(?:write|create|implement|add)\s+(?:the\s+)?(?:function|fn|method)\s+(?:called\s+)?([a-zA-Z_][a-zA-Z0-9_]*)\b(?:[\s,]+(?:with parameters|with parameter|that takes|that takes a|taking)\s+(.+))?/i);
-    if (writeMatch) {
-      const fnName = writeMatch[1];
-      const paramsPhrase = writeMatch[2] || "";
+    // Try description form: "write a function that calculate score" or "write a function to calculate score"
+    const descMatch = text.match(/(?:write|create|implement|add)\s+(?:a\s+)?(?:function|fn|method)(?:\s+(?:to|that|which)\s+(.+))/i);
+    console.log('[Voice] writeMatch:', writeMatch ? writeMatch[0] : null, 'descMatch:', descMatch ? descMatch[0] : null);
+    if (writeMatch || descMatch) {
+      const fnName = writeMatch ? writeMatch[1] : undefined;
+      const paramsPhrase = writeMatch ? (writeMatch[2] || "") : "";
+      const descriptionPhrase = descMatch ? descMatch[1].trim() : undefined;
       // parse params by splitting on 'and', ',' or 'or'
       let params: string[] = [];
       if (paramsPhrase) {
@@ -246,14 +260,16 @@ if __name__ == "__main__":
 
       const lang = currentFile.language || 'javascript';
 
-      // Try LLM generation if API key available
+      // Try LLM generation if proxy indicates enabled
       let snippet: string | null = null;
+      console.log('[Voice] llmEnabled:', llmEnabled, 'descriptionPhrase:', descriptionPhrase);
       try {
-        const key = (import.meta as any).env?.VITE_OPENAI_API_KEY;
-        if (key) {
+        if (llmEnabled) {
           // ask LLM but show preview before inserting
+          console.log('[Voice] Calling LLM...');
           setLlmStatus('loading');
-          const generated = await callLLMGenerateFunction(lang, fnName, params, currentFile.content);
+          const generated = await callLLMGenerateFunction(lang, fnName || '', params, currentFile.content, descriptionPhrase);
+          console.log('[Voice] LLM returned:', generated ? 'code snippet' : 'null');
           if (generated) {
             setLlmSuggestion(generated);
             setShowSuggestionPreview(true);
@@ -264,11 +280,26 @@ if __name__ == "__main__":
           }
         }
       } catch (err) {
-        console.error('LLM generation failed', err);
+        console.error('[Voice] LLM generation failed', err);
       }
 
       // fallback: generate locally and insert at caret
-      const finalSnippet = generateFunctionSnippet(lang, fnName, params);
+      // If no explicit name was provided, derive one from description (best-effort)
+      const deriveName = (name?: string, desc?: string) => {
+        if (name) return name;
+        if (!desc) return 'unnamed_function';
+        // make a simple snake_case or camelCase name depending on language
+        const cleaned = desc.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
+        const stopwords = new Set(['a','the','to','for','of','that','which','with','using','by','is','are','and','or','an','in','on','into']);
+        const parts = cleaned.split(' ').filter(w => w && !stopwords.has(w));
+        if (parts.length === 0) return 'unnamed_function';
+        if (lang === 'python') return parts.join('_');
+        // camelCase for JS-like
+        return parts[0] + parts.slice(1).map(p => p.charAt(0).toUpperCase() + p.slice(1)).join('');
+      };
+
+      const finalName = deriveName(fnName, descriptionPhrase);
+      const finalSnippet = generateFunctionSnippet(lang, finalName, params);
       setCurrentFile(prev => {
         const idx = textareaRef.current ? textareaRef.current.selectionStart ?? prev.content.length : prev.content.length;
         const newContent = prev.content.slice(0, idx) + finalSnippet + prev.content.slice(idx);
@@ -303,23 +334,34 @@ if __name__ == "__main__":
 
   // Call LLM (OpenAI) to generate a function implementation.
   // Requires VITE_OPENAI_API_KEY to be set in environment.
-  async function callLLMGenerateFunction(lang: string, name: string, params: string[], fileContext: string) {
+  async function callLLMGenerateFunction(lang: string, name: string, params: string[], fileContext: string, description?: string) {
     // Call local server proxy which hides the API key
     try {
+      console.log('LLM call starting:', { lang, name, params, description, aiMode });
       const res = await fetch('/api/llm/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ lang, name, params, fileContext })
+        body: JSON.stringify({ lang, name, params, fileContext, aiMode, description })
       });
+      console.log('LLM response status:', res.status);
       if (!res.ok) {
-        console.error('LLM proxy error', await res.text());
+        const errorText = await res.text();
+        console.error('LLM proxy error', res.status, errorText);
+        setLlmStatus('error');
+        setTimeout(() => setLlmStatus('idle'), 3000);
         return null;
       }
       const data = await res.json();
-      if (!data?.success) return data?.content ?? null;
+      console.log('LLM response data:', data);
+      if (!data?.success) {
+        console.warn('LLM returned success=false:', data);
+        return data?.content ?? null;
+      }
       return data.content;
     } catch (err) {
       console.error('LLM proxy call failed', err);
+      setLlmStatus('error');
+      setTimeout(() => setLlmStatus('idle'), 3000);
       return null;
     }
   }
@@ -502,6 +544,8 @@ if __name__ == "__main__":
                     if (e.key === 'Enter') applyRename();
                     if (e.key === 'Escape') cancelRename();
                   }}
+                  name="file-rename"
+                  id="file-rename-input"
                   className="text-xs px-2 py-1 rounded border border-border bg-card"
                   aria-label="Rename file"
                 />
@@ -522,8 +566,14 @@ if __name__ == "__main__":
             </div>
           </div>
           <div className="flex items-center gap-2">
+            <Badge variant={llmEnabled ? "default" : "destructive"} className="text-xs">
+              {llmEnabled ? '● LLM: Ready' : '● LLM: Offline'}
+            </Badge>
             <Button size="sm" variant={autoWrap ? "default" : "ghost"} onClick={() => setAutoWrap(a => !a)}>
               {autoWrap ? 'Wrap: On' : 'Wrap: Off'}
+            </Button>
+            <Button size="sm" variant={aiMode === 'smart' ? "default" : "ghost"} onClick={() => setAiMode(m => m === 'smart' ? 'strict' : 'smart')}>
+              {aiMode === 'smart' ? 'AI: Smart' : 'AI: Strict'}
             </Button>
             <Button variant="ghost" size="sm">
               <Settings className="w-4 h-4" />
@@ -582,9 +632,15 @@ if __name__ == "__main__":
                 <span className="text-muted-foreground">Disabled</span>
               )}
               {llmStatus === 'loading' && <span className="ml-2 text-xs text-amber-400">Generating...</span>}
-              {llmStatus === 'error' && <span className="ml-2 text-xs text-red-400">Error</span>}
+              {llmStatus === 'error' && <span className="ml-2 text-xs text-red-400">Error generating code</span>}
             </div>
           </div>
+
+          {llmStatus === 'error' && (
+            <div className="bg-red-900/20 border border-red-500/30 rounded-md p-2 mb-2">
+              <div className="text-xs text-red-300">LLM generation failed. Check browser console and server logs for details.</div>
+            </div>
+          )}
 
           {showSuggestionPreview && llmSuggestion && (
             <div className="bg-card border border-border rounded-md p-3 mb-3">
