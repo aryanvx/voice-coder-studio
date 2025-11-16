@@ -239,86 +239,46 @@ if __name__ == "__main__":
       return;
     }
 
-    // create function <name>
-    // write/create/implement function with optional params
-    // Try exact-name form first: "write a function called foo with parameters x and y"
+    // ...existing code...
+    // General code generation: if not go-to-line or open-file, always call LLM
     const writeMatch = text.match(/(?:write|create|implement|add)\s+(?:the\s+)?(?:function|fn|method)\s+(?:called\s+)?([a-zA-Z_][a-zA-Z0-9_]*)\b(?:[\s,]+(?:with parameters|with parameter|that takes|that takes a|taking)\s+(.+))?/i);
-    // Try description form: "write a function that calculate score" or "write a function to calculate score"
     const descMatch = text.match(/(?:write|create|implement|add)\s+(?:a\s+)?(?:function|fn|method)(?:\s+(?:to|that|which)\s+(.+))/i);
     console.log('[Voice] writeMatch:', writeMatch ? writeMatch[0] : null, 'descMatch:', descMatch ? descMatch[0] : null);
-    if (writeMatch || descMatch) {
-      const fnName = writeMatch ? writeMatch[1] : undefined;
-      const paramsPhrase = writeMatch ? (writeMatch[2] || "") : "";
-      const descriptionPhrase = descMatch ? descMatch[1].trim() : undefined;
-      // parse params by splitting on 'and', ',' or 'or'
-      let params: string[] = [];
-      if (paramsPhrase) {
-        params = paramsPhrase.split(/\band\b|,|\bor\b/gi).map(s => s.trim()).filter(Boolean)
-          .map(p => p.replace(/[^a-zA-Z0-9_]/g, ''))
-          .filter(Boolean);
-      }
-
-      const lang = currentFile.language || 'javascript';
-
-      // Try LLM generation if proxy indicates enabled
-      let snippet: string | null = null;
-      console.log('[Voice] llmEnabled:', llmEnabled, 'descriptionPhrase:', descriptionPhrase);
-      try {
-        if (llmEnabled) {
-          // ask LLM but show preview before inserting
-          console.log('[Voice] Calling LLM...');
-          setLlmStatus('loading');
-          const generated = await callLLMGenerateFunction(lang, fnName || '', params, currentFile.content, descriptionPhrase);
-          console.log('[Voice] LLM returned:', generated ? 'code snippet' : 'null');
-          if (generated) {
-            setLlmSuggestion(generated);
-            setShowSuggestionPreview(true);
-            setLlmStatus('idle');
-            // leave currentFile unchanged until user accepts
-            setVoiceState(prev => ({ ...prev, isProcessing: false, transcript: text }));
-            return;
-          }
-        }
-      } catch (err) {
-        console.error('[Voice] LLM generation failed', err);
-      }
-
-      // fallback: generate locally and insert at caret
-      // If no explicit name was provided, derive one from description (best-effort)
-      const deriveName = (name?: string, desc?: string) => {
-        if (name) return name;
-        if (!desc) return 'unnamed_function';
-        // make a simple snake_case or camelCase name depending on language
-        const cleaned = desc.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
-        const stopwords = new Set(['a','the','to','for','of','that','which','with','using','by','is','are','and','or','an','in','on','into']);
-        const parts = cleaned.split(' ').filter(w => w && !stopwords.has(w));
-        if (parts.length === 0) return 'unnamed_function';
-        if (lang === 'python') return parts.join('_');
-        // camelCase for JS-like
-        return parts[0] + parts.slice(1).map(p => p.charAt(0).toUpperCase() + p.slice(1)).join('');
-      };
-
-      const finalName = deriveName(fnName, descriptionPhrase);
-      const finalSnippet = generateFunctionSnippet(lang, finalName, params);
-      setCurrentFile(prev => {
-        const idx = textareaRef.current ? textareaRef.current.selectionStart ?? prev.content.length : prev.content.length;
-        const newContent = prev.content.slice(0, idx) + finalSnippet + prev.content.slice(idx);
-        setFiles(fprev => fprev.map(f => f.name === prev.name ? { ...f, content: newContent } : f));
-        setTimeout(() => {
-          if (textareaRef.current) {
-            const textarea = textareaRef.current;
-            textarea.focus();
-            textarea.selectionStart = textarea.selectionEnd = idx + Math.max(0, finalSnippet.length -1);
-          }
-          updateCursorPositionFromSelection();
-        }, 50);
-        setVoiceState(prevState => ({ ...prevState, isProcessing: false, transcript: text }));
-        return { ...prev, content: newContent };
-      });
-      return;
+    const lang = currentFile.language || 'javascript';
+    let fnName = writeMatch ? writeMatch[1] : undefined;
+    let paramsPhrase = writeMatch ? (writeMatch[2] || "") : "";
+    let descriptionPhrase = descMatch ? descMatch[1]?.trim() : undefined;
+    let params: string[] = [];
+    if (paramsPhrase) {
+      params = paramsPhrase.split(/\band\b|,|\bor\b/gi).map(s => s.trim()).filter(Boolean)
+        .map(p => p.replace(/[^a-zA-Z0-9_]/g, ''))
+        .filter(Boolean);
     }
-
-    // default: echo transcript
+    // If neither function nor description matched, treat the whole transcript as a description
+    if (!writeMatch && !descMatch) {
+      descriptionPhrase = text;
+      fnName = '';
+      params = [];
+    }
+    // Try LLM generation if proxy indicates enabled
+    try {
+      if (llmEnabled) {
+        console.log('[Voice] Calling LLM...');
+        setLlmStatus('loading');
+        const generated = await callLLMGenerateFunction(lang, fnName || '', params, currentFile.content, descriptionPhrase);
+        console.log('[Voice] LLM returned:', generated ? 'code snippet' : 'null');
+        if (generated) {
+          setLlmSuggestion(generated);
+          setShowSuggestionPreview(true);
+          setLlmStatus('idle');
+          setVoiceState(prev => ({ ...prev, isProcessing: false, transcript: text }));
+          return;
+        }
+      }
+    } catch (err) {
+      console.error('[Voice] LLM generation failed', err);
+    }
+    // fallback: echo transcript
     setVoiceState(prev => ({ ...prev, isProcessing: false, transcript: text }));
   }
 
