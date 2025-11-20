@@ -1,6 +1,6 @@
 # **Voice-Controlled Coding Assistant**
 
-This is my take on reimagining how we write code: ditching the keyboard (mostly) and letting your voice do the heavy lifting. Think VS Code meets GitHub Codespaces meets AI that actually listens to you.
+This is my take on reimagining how we write code: ditching the keyboard (if you let it) and letting your voice do the heavy lifting. Inspo from teacher who recommended something for physically impaired coders.
 
 For this first version, I kept it relatively simple:
 
@@ -43,15 +43,12 @@ The idea is to get the vibe right first with smooth animations, pulsing indicato
    npm install
    ```
 
-3. Start the development server:
+3. Start the dev server:
    ```bash
    npm run dev
    ```
 
-4. Open your browser and navigate to:
-   - http://localhost:5173 (or the URL shown in your terminal)
-   
-Now you can start talking to your editor!
+4. Check port allocated in the terminal and open it in your browser
 
 ### Optional: Enable LLM-based code generation
 
