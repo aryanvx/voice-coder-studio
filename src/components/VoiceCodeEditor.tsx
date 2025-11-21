@@ -73,7 +73,7 @@ if __name__ == "__main__":
   const [autoWrap, setAutoWrap] = useState(false);
   // AI interpretation mode: 'strict' = follow command exactly, 'smart' = AI interprets intent
   const [aiMode, setAiMode] = useState<'strict' | 'smart'>('smart');
-
+  const llmEnabledRef = useRef(false);
   const handleContentChange = (value: string) => {
     setCurrentFile(prev => ({ ...prev, content: value }));
     // persist into files array so switching files retains edits
@@ -89,28 +89,31 @@ if __name__ == "__main__":
 
   // Check server-side LLM proxy availability
   useEffect(() => {
-    let mounted = true;
-    (async () => {
-      try {
-        console.log('[Health] Checking LLM proxy availability...');
-        const res = await fetch('/api/llm/health');
-        if (!mounted) return;
-        if (!res.ok) {
-          console.warn('[Health] Health check failed with status:', res.status);
-          setLlmEnabled(false);
-          return;
-        }
-        const data = await res.json();
-        console.log('[Health] Health check response:', data);
-        setLlmEnabled(Boolean(data?.enabled));
-        console.log('[Health] LLM enabled set to:', Boolean(data?.enabled));
-      } catch (err) {
-        console.error('[Health] Health check error:', err);
+  let mounted = true;
+  (async () => {
+    try {
+      console.log('[Health] Checking LLM proxy availability...');
+      const res = await fetch('/api/llm/health');
+      if (!mounted) return;
+      if (!res.ok) {
+        console.warn('[Health] Health check failed with status:', res.status);
         setLlmEnabled(false);
+        llmEnabledRef.current = false;  // ADD THIS
+        return;
       }
-    })();
-    return () => { mounted = false; };
-  }, []);
+      const data = await res.json();
+      console.log('[Health] Health check response:', data);
+      setLlmEnabled(Boolean(data?.enabled));
+      llmEnabledRef.current = Boolean(data?.enabled);  // ADD THIS
+      console.log('[Health] LLM enabled set to:', Boolean(data?.enabled));
+    } catch (err) {
+      console.error('[Health] Health check error:', err);
+      setLlmEnabled(false);
+      llmEnabledRef.current = false;  // ADD THIS
+    }
+  })();
+  return () => { mounted = false; };
+}, []);
 
   const startRename = () => {
     setRenameValue(currentFile.name);
@@ -197,13 +200,14 @@ if __name__ == "__main__":
     const lower = text.toLowerCase();
     console.log('[Voice] Normalized text:', text);
 
-    // go to line N
-    const gotoMatch = lower.match(/(?:go to|goto|go)\s+line\s+(\d+)/);
-    if (gotoMatch) {
-      const line = parseInt(gotoMatch[1], 10);
+    const gotoMatch = lower.match(/(?:go to|goto|go|navigate to|navigate|jump to|jump|move to|move|skip to|skip|scroll to|scroll|head to|take me to|bring me to|show me|show)\s+line\s+(\d+)/);
+
+    const lineOnlyMatch = lower.match(/^line\s+(\d+)$/);
+
+    if (gotoMatch || lineOnlyMatch) {
+      const line = parseInt((gotoMatch || lineOnlyMatch)[1], 10);
       const column = 1;
       setCursorPosition({ line, column });
-      // set textarea caret to start of that line
       setTimeout(() => {
         const el = textareaRef.current;
         if (!el) return;
@@ -216,7 +220,6 @@ if __name__ == "__main__":
       return;
     }
 
-    // open <filename>
     const openMatch = lower.match(/(?:open|show|open file)\s+(.+\.[a-zA-Z0-9_\-]+)/);
     if (openMatch) {
       const filename = openMatch[1].trim();
@@ -262,7 +265,8 @@ if __name__ == "__main__":
     }
     // Try LLM generation if proxy indicates enabled
     try {
-      if (llmEnabled) {
+      console.log('[Voice] llmEnabled:', llmEnabled, 'descriptionPhrase:', descriptionPhrase);
+      if (llmEnabledRef.current) {
         console.log('[Voice] Calling LLM...');
         setLlmStatus('loading');
         const generated = await callLLMGenerateFunction(lang, fnName || '', params, currentFile.content, descriptionPhrase);
