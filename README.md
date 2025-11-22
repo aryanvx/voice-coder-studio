@@ -17,7 +17,7 @@ print(f"The final score is {finalScore}")
 ### Voice Commands
 
 Navigation:
-- "Go to line 17" / "Navigate to line 17" / "Jump to line 17"
+- "Go to line 17" / "Navigate to line 17" / "Jump to line 17" (i expanded the regex to work for a lot of synonyms)
 - "Open main.py" / "Open style.css"
 
 Code generation:
