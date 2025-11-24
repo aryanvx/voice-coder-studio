@@ -26,6 +26,12 @@ The idea is to get the vibe right first with smooth animations, pulsing indicato
 
 ## Getting Started
 
+## AI Setup
+
+VoiceCode uses your own API key for AI features. This keeps your key private and lets you control costs.
+
+**Quick setup:** Click the Key icon (⚿) in the top bar and follow the instructions. We recommend Groq (free, fast). See [USER_GUIDE.md](USER_GUIDE.md) for detailed setup.
+
 ### Prerequisites
 - Node.js (v18 or higher)
 - npm (comes with Node.js)
