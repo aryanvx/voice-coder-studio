@@ -1,6 +1,6 @@
 # **Voice-Controlled Coding Assistant**
 
-This is my take on reimagining how we write code: ditching the keyboard (if you let it) and letting your voice do the heavy lifting. Inspo from teacher who recommended something for physically impaired coders.
+This is my take on reimagining how I write code: ditching the keyboard (if you let it) and letting your voice do the heavy lifting. Inspo from teacher who recommended something for physically impaired coders.
 
 For v1.0, I kept it relatively simple:
 
@@ -30,7 +30,7 @@ The idea is to get the vibe right first with smooth animations, pulsing indicato
 
 VoiceCode uses your own API key for AI features. This keeps your key private and lets you control costs.
 
-**Quick setup:** Click the Key icon (⚿) in the right side of the top bar and follow the instructions. We recommend Groq (free, fast). See [USER_GUIDE.md](USER_GUIDE.md) for detailed setup.
+**Quick setup:** Click the Key icon (⚿) in the right side of the top bar and follow the instructions. I recommend Groq (free, fast). See [USER_GUIDE.md](USER_GUIDE.md) for detailed setup.
 
 ### Prerequisites
 - Node.js (v18 or higher)
@@ -74,4 +74,4 @@ Then restart the dev server. When enabled, the editor will show an "LLM: Enabled
 
 **This is just the start.**
 
-The plan is to turn this into a full AI-powered development environment that can understand your coding style, explain your bugs, and maybe even argue with you about why your variable names are terrible (seriously considering this feature lol).
+The plan is to turn this into a full AI-poIred development environment that can understand your coding style, explain your bugs, and maybe even argue with you about why your variable names are terrible (seriously considering this feature lol).
