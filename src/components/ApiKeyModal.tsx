@@ -15,11 +15,38 @@ interface ApiKeyModalProps {
 export default function ApiKeyModal({ isOpen, onClose, onSave, currentProvider, currentKey }: ApiKeyModalProps) {
   const [provider, setProvider] = useState<'groq' | 'openai'>(currentProvider || 'groq');
   const [apiKey, setApiKey] = useState(currentKey);
+  const [error, setError] = useState<string>('');
 
   if (!isOpen) return null;
 
+  const validateKey = (key: string, prov: 'groq' | 'openai'): boolean => {
+    const trimmedKey = key.trim();
+    if (!trimmedKey) {
+      setError('API key cannot be empty');
+      return false;
+    }
+    
+    if (prov === 'groq' && !trimmedKey.startsWith('gsk_')) {
+      setError('Groq API keys must start with "gsk_"');
+      return false;
+    }
+    
+    if (prov === 'openai' && !trimmedKey.startsWith('sk-')) {
+      setError('OpenAI API keys must start with "sk-"');
+      return false;
+    }
+    
+    if (trimmedKey.length < 20) {
+      setError('API key seems too short. Please check and try again.');
+      return false;
+    }
+    
+    setError('');
+    return true;
+  };
+
   const handleSave = () => {
-    if (apiKey.trim()) {
+    if (validateKey(apiKey, provider)) {
       onSave(provider, apiKey.trim());
       onClose();
     }
@@ -84,9 +111,15 @@ export default function ApiKeyModal({ isOpen, onClose, onSave, currentProvider, 
               type="password"
               placeholder={provider === 'groq' ? 'gsk_...' : 'sk-...'}
               value={apiKey}
-              onChange={(e) => setApiKey(e.target.value)}
+              onChange={(e) => {
+                setApiKey(e.target.value);
+                setError('');
+              }}
               className="font-mono text-sm"
             />
+            {error && (
+              <p className="text-red-400 text-xs mt-2">{error}</p>
+            )}
           </div>
 
           <div className="bg-muted rounded-md p-3 text-sm">
