@@ -64,7 +64,7 @@ Toggle in the top bar:
 
 - **Smart**: AI interprets your intent and adds what it thinks are helpful features
 - **Strict**: AI follows your command exactly as stated
-- I put a pretty neat example in the **README.md** if you wanna check it out
+- I put a pretty neat example in the **[README.md](README.md)** if you wanna check it out
 
 ### Troubleshooting
 
