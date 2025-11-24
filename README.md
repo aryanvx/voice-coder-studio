@@ -26,7 +26,7 @@ The idea is to get the vibe right first with smooth animations, pulsing indicato
 
 ## Getting Started
 
-## AI Setup
+### AI Setup
 
 VoiceCode uses your own API key for AI features. This keeps your key private and lets you control costs.
 
