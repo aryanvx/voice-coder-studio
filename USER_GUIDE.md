@@ -7,12 +7,13 @@ VoiceCode uses AI to generate code from your voice commands. To use AI features,
 ### Why Bring Your Own Key?
 
 - **Your key, your control**: Your API key stays in your browser only
-- **Free options available**: Groq offers a generous free tier
+- **Free options available**: Groq offers a very generous free tier
 - **Privacy**: We never see or store your API key on our servers
+- **Me**: Cause I ain't letting you use mine
 
 ### Setup (2 minutes)
 
-#### Option 1: Groq (Recommended - Free)
+#### Option 1: Groq (Recommended + FREE)
 
 1. Visit [console.groq.com](https://console.groq.com)
 2. Sign up (takes 1 minute)
@@ -22,7 +23,7 @@ VoiceCode uses AI to generate code from your voice commands. To use AI features,
 6. Select "Groq (Free)" and paste your key
 7. Click "Save Key"
 
-**Free tier**: 30 requests per minute - plenty for personal use!
+**Free tier**: 30 requests per minute - good enough imo.
 
 #### Option 2: OpenAI
 
@@ -34,14 +35,14 @@ VoiceCode uses AI to generate code from your voice commands. To use AI features,
 6. Select "OpenAI" and paste your key
 7. Click "Save Key"
 
-**Note**: OpenAI requires payment but offers more advanced models.
+**Note**: OpenAI requires payment but you do get more advanced models.
 
 ### Using VoiceCode
 
 Once your API key is configured:
 
 1. Click the **microphone button**
-2. Speak your command clearly
+2. Speak your command with a crystal clear voice. If you can limit background noise, that'll also enhance your experience.
 3. Wait for the AI to generate code
 4. Review the suggestion and click **Accept** or **Reject**
 
@@ -61,8 +62,9 @@ Once your API key is configured:
 
 Toggle in the top bar:
 
-- **Smart**: AI interprets your intent and adds helpful features
+- **Smart**: AI interprets your intent and adds what it thinks are helpful features
 - **Strict**: AI follows your command exactly as stated
+- I put a pretty neat example in the **[README.md](README.md)** if you wanna check it out
 
 ### Troubleshooting
 

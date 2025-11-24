@@ -9,7 +9,7 @@ For v1.0, I kept it relatively simple:
 - LLM status showing either enabled or disabled
 - File rename options
 - Toggle text wrap
-- Artifical Intelligence, what I call, smartness. This uses an API from OpenAI's Chat-GPT 5 model and you can either set it to "strict" or "smart", the difference being in how accurately it will execute your **actual** prompt. Strict will generate code based exactly on what you said. For instance, if you said "write a print statement that will print the final score", the output would look something like this:
+- Artifical Intelligence, what I call, smartness. This uses an API from OpenAI's OR Groq's model and you can either set it to "strict" or "smart", the difference being in how accurately it will execute your ***actual*** prompt. Strict will generate code based exactly on what you said. For instance, if you said "write a print statement that will print the final score", the output would look something like this:
 
 ```
 print(finalScore)
@@ -26,7 +26,7 @@ The idea is to get the vibe right first with smooth animations, pulsing indicato
 
 ## Getting Started
 
-## AI Setup
+### AI Setup
 
 VoiceCode uses your own API key for AI features. This keeps your key private and lets you control costs.
 
