@@ -4,9 +4,9 @@ This is my take on reimagining how we write code: ditching the keyboard (if you 
 
 For v1.0, I kept it relatively simple:
 
-- A landing page that explains what’s going on
+- A landing page that shows you requirements + instructions
 - A main coding interface with an editor that feels familiar if you’ve ever touched VS Code
-- LLM status showing either enabled or disabled
+- LLM status showing either enabled or disabled (make sure to put it in API key on the top-right)
 - File rename options
 - Toggle text wrap
 - Artifical Intelligence, what I call, smartness. This uses an API from OpenAI's OR Groq's model and you can either set it to "strict" or "smart", the difference being in how accurately it will execute your ***actual*** prompt. Strict will generate code based exactly on what you said. For instance, if you said "write a print statement that will print the final score", the output would look something like this:
