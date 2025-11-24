@@ -2,7 +2,7 @@
 
 This is my take on reimagining how we write code: ditching the keyboard (if you let it) and letting your voice do the heavy lifting. Inspo from teacher who recommended something for physically impaired coders.
 
-For this first version, I kept it relatively simple:
+For v1.0, I kept it relatively simple:
 
 - A landing page that explains what’s going on
 - A main coding interface with an editor that feels familiar if you’ve ever touched VS Code
