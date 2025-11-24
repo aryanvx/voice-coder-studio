@@ -4,6 +4,8 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Mic, MicOff, Play, Square, FileText, Folder, Settings, Zap } from "lucide-react";
 import { cn } from "@/lib/utils";
+import ApiKeyModal from "@/components/ApiKeyModal";
+import { Key } from "lucide-react";
 
 interface VoiceState {
   isListening: boolean;
@@ -79,6 +81,9 @@ if __name__ == "__main__":
     // persist into files array so switching files retains edits
     setFiles(prev => prev.map(f => f.name === currentFile.name ? { ...f, content: value } : f));
   };
+  const [showApiKeyModal, setShowApiKeyModal] = useState(false);
+  const [userApiKey, setUserApiKey] = useState<string>('');
+  const [userProvider, setUserProvider] = useState<'groq' | 'openai'>('groq');
 
   // keep rename input in sync when switching files
   useEffect(() => {
@@ -87,33 +92,39 @@ if __name__ == "__main__":
     setIsRenaming(false);
   }, [currentFile.name]);
 
-  // Check server-side LLM proxy availability
   useEffect(() => {
-  let mounted = true;
-  (async () => {
-    try {
-      console.log('[Health] Checking LLM proxy availability...');
-      const res = await fetch('/api/llm/health');
-      if (!mounted) return;
-      if (!res.ok) {
-        console.warn('[Health] Health check failed with status:', res.status);
-        setLlmEnabled(false);
-        llmEnabledRef.current = false;  // ADD THIS
-        return;
-      }
-      const data = await res.json();
-      console.log('[Health] Health check response:', data);
-      setLlmEnabled(Boolean(data?.enabled));
-      llmEnabledRef.current = Boolean(data?.enabled);  // ADD THIS
-      console.log('[Health] LLM enabled set to:', Boolean(data?.enabled));
-    } catch (err) {
-      console.error('[Health] Health check error:', err);
+    const savedKey = localStorage.getItem('voicecode_api_key');
+    const savedProvider = localStorage.getItem('voicecode_provider') as 'groq' | 'openai' | null;
+    
+    if (savedKey && savedProvider) {
+      setUserApiKey(savedKey);
+      setUserProvider(savedProvider);
+      setLlmEnabled(true);
+      llmEnabledRef.current = true;
+      console.log('[Client] Using user API key:', savedProvider);
+    } else {
       setLlmEnabled(false);
-      llmEnabledRef.current = false;  // ADD THIS
+      llmEnabledRef.current = false;
+      console.log('[Client] No API key configured');
     }
-  })();
-  return () => { mounted = false; };
-}, []);
+  }, []);
+
+  const handleSaveApiKey = (provider: 'groq' | 'openai', key: string) => {
+    if (key) {
+      localStorage.setItem('voicecode_api_key', key);
+      localStorage.setItem('voicecode_provider', provider);
+      setUserApiKey(key);
+      setUserProvider(provider);
+      setLlmEnabled(true);
+      llmEnabledRef.current = true;
+    } else {
+      localStorage.removeItem('voicecode_api_key');
+      localStorage.removeItem('voicecode_provider');
+      setUserApiKey('');
+      setLlmEnabled(false);
+      llmEnabledRef.current = false;
+    }
+  };
 
   const startRename = () => {
     setRenameValue(currentFile.name);
@@ -299,31 +310,87 @@ if __name__ == "__main__":
   // Call LLM (OpenAI) to generate a function implementation.
   // Requires VITE_OPENAI_API_KEY to be set in environment.
   async function callLLMGenerateFunction(lang: string, name: string, params: string[], fileContext: string, description?: string) {
-    // Call local server proxy which hides the API key
+    if (!userApiKey || !userProvider) {
+      console.error('[LLM] No API key configured');
+      return null;
+    }
+
+    const ENDPOINTS = {
+      groq: 'https://api.groq.com/openai/v1/chat/completions',
+      openai: 'https://api.openai.com/v1/chat/completions'
+    };
+
+    const MODELS = {
+      groq: 'llama-3.3-70b-versatile',
+      openai: 'gpt-4o-mini'
+    };
+
+    const paramList = params.join(', ');
+
+    let system = `You are a code assistant. Return ONLY code, no explanations or markdown.`;
+    if (aiMode === 'strict') {
+      system += ` Follow instructions EXACTLY. No extra features.`;
+    } else {
+      system += ` Interpret intent and write complete, useful code.`;
+    }
+
+    let user;
+    if (description) {
+      user = `Write ${lang} code: ${description}`;
+      if (name) user += ` Function name: ${name}.`;
+      if (paramList) user += ` Parameters: ${paramList}.`;
+    } else {
+      user = `Write a ${lang} function named ${name} with parameters: ${paramList}.`;
+    }
+
+    if (fileContext?.trim()) {
+      user += `\n\nContext:\n${fileContext.slice(0, 1000)}`;
+    }
+
     try {
-      console.log('LLM call starting:', { lang, name, params, description, aiMode });
-      const res = await fetch('/api/llm/generate', {
+      console.log(`[LLM] Calling ${userProvider} API directly...`);
+      const res = await fetch(ENDPOINTS[userProvider], {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ lang, name, params, fileContext, aiMode, description })
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${userApiKey}`
+        },
+        body: JSON.stringify({
+          model: MODELS[userProvider],
+          messages: [
+            { role: 'system', content: system },
+            { role: 'user', content: user }
+          ],
+          max_tokens: 800,
+          temperature: 0.2
+        })
       });
-      console.log('LLM response status:', res.status);
+
       if (!res.ok) {
         const errorText = await res.text();
-        console.error('LLM proxy error', res.status, errorText);
+        console.error('[LLM] API error', res.status, errorText);
         setLlmStatus('error');
         setTimeout(() => setLlmStatus('idle'), 3000);
         return null;
       }
+
       const data = await res.json();
-      console.log('LLM response data:', data);
-      if (!data?.success) {
-        console.warn('LLM returned success=false:', data);
-        return data?.content ?? null;
+      let content = data?.choices?.[0]?.message?.content;
+      
+      if (!content) {
+        console.warn('[LLM] No content in response');
+        return null;
       }
-      return data.content;
+
+      // Extract code from markdown if present
+      const match = content.match(/```[a-zA-Z]*\n([\s\S]*?)```/);
+      if (match) content = match[1].trim();
+      if (!content.endsWith('\n')) content += '\n';
+
+      console.log('[LLM] Generated code:', content.length, 'chars');
+      return content;
     } catch (err) {
-      console.error('LLM proxy call failed', err);
+      console.error('[LLM] Call failed', err);
       setLlmStatus('error');
       setTimeout(() => setLlmStatus('idle'), 3000);
       return null;
@@ -539,8 +606,8 @@ if __name__ == "__main__":
             <Button size="sm" variant={aiMode === 'smart' ? "default" : "ghost"} onClick={() => setAiMode(m => m === 'smart' ? 'strict' : 'smart')}>
               {aiMode === 'smart' ? 'AI: Smart' : 'AI: Strict'}
             </Button>
-            <Button variant="ghost" size="sm">
-              <Settings className="w-4 h-4" />
+            <Button variant="ghost" size="sm" onClick={() => setShowApiKeyModal(true)}>
+              <Key className="w-4 h-4" />
             </Button>
           </div>
         </div>
@@ -682,6 +749,13 @@ if __name__ == "__main__":
             </Badge>
           </div>
         </div>
+        <ApiKeyModal
+          isOpen={showApiKeyModal}
+          onClose={() => setShowApiKeyModal(false)}
+          onSave={handleSaveApiKey}
+          currentProvider={userProvider}
+          currentKey={userApiKey}
+        />
       </div>
     </div>
   );
