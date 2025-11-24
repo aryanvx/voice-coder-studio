@@ -64,6 +64,12 @@ If you want the editor to generate full function implementations using an LLM (O
 VITE_OPENAI_API_KEY=sk-xxxxxxxxxxxxxxxx
 ```
 
+or
+
+```bash
+GROQ_API_KEY=gsk_xxxxxxxxxxxxxxxx
+```
+
 Then restart the dev server. When enabled, the editor will show an "LLM: Enabled" indicator and preview any generated suggestion before you accept or reject it.
 
 **This is just the start.**
