@@ -66,26 +66,23 @@ if __name__ == "__main__":
   const [llmStatus, setLlmStatus] = useState<'idle' | 'loading' | 'error'>('idle');
   const [llmSuggestion, setLlmSuggestion] = useState<string | null>(null);
   const [showSuggestionPreview, setShowSuggestionPreview] = useState(false);
-  // Rename file UI state
   const [isRenaming, setIsRenaming] = useState(false);
   const [renameValue, setRenameValue] = useState(currentFile.name);
   const [renameError, setRenameError] = useState<string | null>(null);
   const renameInputRef = useRef<HTMLInputElement | null>(null);
-  // Auto-wrap toggle for long lines
   const [autoWrap, setAutoWrap] = useState(false);
-  // AI interpretation mode: 'strict' = follow command exactly, 'smart' = AI interprets intent
   const [aiMode, setAiMode] = useState<'strict' | 'smart'>('smart');
   const llmEnabledRef = useRef(false);
   const handleContentChange = (value: string) => {
     setCurrentFile(prev => ({ ...prev, content: value }));
-    // persist into files array so switching files retains edits
     setFiles(prev => prev.map(f => f.name === currentFile.name ? { ...f, content: value } : f));
   };
   const [showApiKeyModal, setShowApiKeyModal] = useState(false);
   const [userApiKey, setUserApiKey] = useState<string>('');
   const [userProvider, setUserProvider] = useState<'groq' | 'openai'>('groq');
+  const userApiKeyRef = useRef<string>('');
+  const userProviderRef = useRef<'groq' | 'openai'>('groq');
 
-  // keep rename input in sync when switching files
   useEffect(() => {
     setRenameValue(currentFile.name);
     setRenameError(null);
@@ -99,6 +96,8 @@ if __name__ == "__main__":
     if (savedKey && savedProvider) {
       setUserApiKey(savedKey);
       setUserProvider(savedProvider);
+      userApiKeyRef.current = savedKey;
+      userProviderRef.current = savedProvider;
       setLlmEnabled(true);
       llmEnabledRef.current = true;
       console.log('[Client] Using user API key:', savedProvider);
@@ -115,14 +114,19 @@ if __name__ == "__main__":
       localStorage.setItem('voicecode_provider', provider);
       setUserApiKey(key);
       setUserProvider(provider);
+      userApiKeyRef.current = key;
+      userProviderRef.current = provider;
       setLlmEnabled(true);
       llmEnabledRef.current = true;
+      console.log('[Client] API key saved, llmEnabled:', true);
     } else {
       localStorage.removeItem('voicecode_api_key');
       localStorage.removeItem('voicecode_provider');
       setUserApiKey('');
+      userApiKeyRef.current = '';
       setLlmEnabled(false);
       llmEnabledRef.current = false;
+      console.log('[Client] API key cleared');
     }
   };
 
@@ -130,7 +134,6 @@ if __name__ == "__main__":
     setRenameValue(currentFile.name);
     setRenameError(null);
     setIsRenaming(true);
-    // focus shortly after render
     setTimeout(() => renameInputRef.current?.focus(), 50);
   };
 
@@ -146,14 +149,12 @@ if __name__ == "__main__":
       setRenameError('Name cannot be empty');
       return;
     }
-    // Prevent duplicate file names (case-insensitive), except when it's the same file
     const conflict = files.find(f => f.name.toLowerCase() === newName.toLowerCase() && f.name !== currentFile.name);
     if (conflict) {
       setRenameError('A file with that name already exists');
       return;
     }
 
-    // Update files array and currentFile
     setFiles(prev => prev.map(f => f.name === currentFile.name ? { ...f, name: newName } : f));
     setCurrentFile(prev => ({ ...prev, name: newName }));
     setIsRenaming(false);
@@ -171,7 +172,6 @@ if __name__ == "__main__":
     setCursorPosition({ line, column });
   };
 
-  // Helper: convert line/column to string index
   function getIndexFromLineColumn(content: string, line: number, column: number) {
     const lines = content.split('\n');
     const clampedLine = Math.max(1, Math.min(line, lines.length));
@@ -184,8 +184,6 @@ if __name__ == "__main__":
     return idx;
   }
 
-  // Execute parsed voice commands
-  // Convert common spoken number words to digits (basic)
   function normalizeSpokenNumbers(input: string) {
     const smallNums: Record<string, number> = {
       zero:0, one:1, two:2, three:3, four:4, five:5, six:6, seven:7, eight:8, nine:9, ten:10,
@@ -238,7 +236,6 @@ if __name__ == "__main__":
       if (file) {
         setCurrentFile(file);
         setVoiceState(prev => ({ ...prev, isProcessing: false, transcript: text }));
-        // place cursor at start
         setTimeout(() => {
           const el = textareaRef.current;
           if (!el) return;
@@ -247,14 +244,11 @@ if __name__ == "__main__":
           updateCursorPositionFromSelection();
         }, 50);
       } else {
-        // not found
         setVoiceState(prev => ({ ...prev, isProcessing: false, transcript: `File ${filename} not found` }));
       }
       return;
     }
 
-    // ...existing code...
-    // General code generation: if not go-to-line or open-file, always call LLM
     const writeMatch = text.match(/(?:write|create|implement|add)\s+(?:the\s+)?(?:function|fn|method)\s+(?:called\s+)?([a-zA-Z_][a-zA-Z0-9_]*)\b(?:[\s,]+(?:with parameters|with parameter|that takes|that takes a|taking)\s+(.+))?/i);
     const descMatch = text.match(/(?:write|create|implement|add)\s+(?:a\s+)?(?:function|fn|method)(?:\s+(?:to|that|which)\s+(.+))/i);
     console.log('[Voice] writeMatch:', writeMatch ? writeMatch[0] : null, 'descMatch:', descMatch ? descMatch[0] : null);
@@ -268,13 +262,11 @@ if __name__ == "__main__":
         .map(p => p.replace(/[^a-zA-Z0-9_]/g, ''))
         .filter(Boolean);
     }
-    // If neither function nor description matched, treat the whole transcript as a description
     if (!writeMatch && !descMatch) {
       descriptionPhrase = text;
       fnName = '';
       params = [];
     }
-    // Try LLM generation if proxy indicates enabled
     try {
       console.log('[Voice] llmEnabled:', llmEnabled, 'descriptionPhrase:', descriptionPhrase);
       if (llmEnabledRef.current) {
@@ -293,25 +285,25 @@ if __name__ == "__main__":
     } catch (err) {
       console.error('[Voice] LLM generation failed', err);
     }
-    // fallback: echo transcript
     setVoiceState(prev => ({ ...prev, isProcessing: false, transcript: text }));
   }
 
-  // Generate a function snippet for a given language
   function generateFunctionSnippet(lang: string, name: string, params: string[]) {
     const p = params.join(', ');
     if (lang === 'python') {
       return `def ${name}(${p}):\n    """Auto-generated function ${name}"""\n    # TODO: implement\n    pass\n`;
     }
-    // default to JavaScript
     return `function ${name}(${p}) {\n  // TODO: implement ${name}\n}\n`;
   }
 
-  // Call LLM (OpenAI) to generate a function implementation.
-  // Requires VITE_OPENAI_API_KEY to be set in environment.
   async function callLLMGenerateFunction(lang: string, name: string, params: string[], fileContext: string, description?: string) {
-    if (!userApiKey || !userProvider) {
+    const apiKey = userApiKeyRef.current;
+    const provider = userProviderRef.current;
+
+    if (!apiKey || !provider) {  // CHANGED: was !userApiKey
       console.error('[LLM] No API key configured');
+      setLlmStatus('error');
+      setTimeout(() => setLlmStatus('idle'), 3000);
       return null;
     }
 
@@ -348,15 +340,15 @@ if __name__ == "__main__":
     }
 
     try {
-      console.log(`[LLM] Calling ${userProvider} API directly...`);
-      const res = await fetch(ENDPOINTS[userProvider], {
+      console.log(`[LLM] Calling ${provider} API directly...`);
+      const res = await fetch(ENDPOINTS[provider], {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${userApiKey}`
+          'Authorization': `Bearer ${apiKey}`
         },
         body: JSON.stringify({
-          model: MODELS[userProvider],
+          model: MODELS[provider],
           messages: [
             { role: 'system', content: system },
             { role: 'user', content: user }
@@ -382,7 +374,6 @@ if __name__ == "__main__":
         return null;
       }
 
-      // Extract code from markdown if present
       const match = content.match(/```[a-zA-Z]*\n([\s\S]*?)```/);
       if (match) content = match[1].trim();
       if (!content.endsWith('\n')) content += '\n';
@@ -397,7 +388,6 @@ if __name__ == "__main__":
     }
   }
 
-  // Keep gutter scroll in sync with textarea scroll
   const handleEditorScroll = () => {
     const el = textareaRef.current;
     const gutter = gutterRef.current;
@@ -405,21 +395,17 @@ if __name__ == "__main__":
     gutter.scrollTop = el.scrollTop;
   };
 
-  // When content or file changes, ensure cursor stays valid and gutter updates
   useEffect(() => {
     const el = textareaRef.current;
     if (!el) return;
-    // clamp cursor to available content
     const totalLines = currentFile.content.split('\n').length;
     setCursorPosition(prev => ({
       line: Math.min(prev.line, totalLines),
       column: prev.column
     }));
-    // ensure gutter scroll matches
     handleEditorScroll();
   }, [currentFile.content]);
 
-  // Accept or reject LLM suggestion
   const acceptLlmSuggestion = () => {
     if (!llmSuggestion) return;
     const snippet = llmSuggestion;
@@ -448,7 +434,6 @@ if __name__ == "__main__":
     setLlmStatus('idle');
   };
 
-  // Web Speech API integration
   const recognitionRef = useRef<any>(null);
 
   useEffect(() => {
@@ -463,7 +448,6 @@ if __name__ == "__main__":
 
     recognitionRef.current.onresult = (event: any) => {
       const transcript = event.results[0][0].transcript;
-      // Process spoken command
       setVoiceState(prev => ({ ...prev, isListening: false, isProcessing: true }));
       setCommandHistory(prev => [...prev, transcript]);
       processVoiceCommand(transcript.trim());
@@ -498,9 +482,7 @@ if __name__ == "__main__":
 
   return (
     <div className="h-screen flex bg-background text-foreground">
-      {/* Sidebar */}
       <div className="w-64 bg-secondary border-r border-border flex flex-col">
-        {/* Header */}
         <div className="p-4 border-b border-border">
           <div className="flex items-center gap-2">
             <div className="w-2 h-2 bg-gradient-voice rounded-full animate-pulse-glow"></div>
@@ -510,8 +492,6 @@ if __name__ == "__main__":
           </div>
           <p className="text-xs text-muted-foreground mt-1">Voice-powered coding</p>
         </div>
-
-        {/* File Explorer */}
         <div className="flex-1 p-4">
           <div className="flex items-center gap-2 mb-3">
             <Folder className="w-4 h-4 text-muted-foreground" />
@@ -528,11 +508,9 @@ if __name__ == "__main__":
                     : "hover:bg-muted text-muted-foreground"
                 )}
                 onClick={() => {
-                  // save current edits, then open selected file
                   setFiles(prev => prev.map(f => f.name === currentFile.name ? { ...f, content: currentFile.content } : f));
                   const found = files.find(f => f.name === file.name);
                   if (found) setCurrentFile(found);
-                  // reset cursor position
                   setTimeout(() => updateCursorPositionFromSelection(), 20);
                 }}
               >
@@ -542,8 +520,6 @@ if __name__ == "__main__":
             ))}
           </div>
         </div>
-
-        {/* Voice Commands History */}
         <div className="p-4 border-t border-border">
           <div className="flex items-center gap-2 mb-3">
             <Zap className="w-4 h-4 text-accent" />
@@ -558,13 +534,9 @@ if __name__ == "__main__":
           </div>
         </div>
       </div>
-
-      {/* Main Editor Area */}
       <div className="flex-1 flex flex-col">
-        {/* Top Bar */}
         <div className="h-12 bg-card border-b border-border flex items-center justify-between px-4">
           <div className="flex items-center gap-4">
-            {/* File name + rename UI */}
             {isRenaming ? (
               <div className="flex items-center gap-2">
                 <input
@@ -611,16 +583,12 @@ if __name__ == "__main__":
             </Button>
           </div>
         </div>
-
-        {/* Code Editor (editable) */}
         <div className="flex-1 bg-code-bg p-4 font-mono text-sm overflow-auto">
           <div className="flex h-full min-w-0">
-            {/* Line numbers gutter */}
             <div
               ref={gutterRef}
               className="w-12 pr-3 select-none text-muted-foreground text-right tabular-nums overflow-auto"
               style={{
-                // Ensure the gutter uses same font and metrics as editor
                 fontFamily: 'JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, Monaco, "Roboto Mono", "Courier New", monospace'
               }}
             >
@@ -633,8 +601,6 @@ if __name__ == "__main__":
                 </div>
               ))}
             </div>
-
-            {/* Editable textarea (fallback editor) */}
             <div className="flex-1 min-w-0">
               <textarea
                 ref={textareaRef}
@@ -651,8 +617,6 @@ if __name__ == "__main__":
             </div>
           </div>
         </div>
-
-        {/* LLM status & preview (if any) */}
         <div className="px-4 pb-2">
           <div className="flex items-center justify-between mb-2">
             <div className="text-xs text-muted-foreground">LLM:</div>
@@ -686,8 +650,6 @@ if __name__ == "__main__":
             </div>
           )}
         </div>
-
-        {/* Voice Control Panel */}
         <div className="h-24 bg-card border-t border-border p-4 flex items-center gap-4">
           <Button
             onClick={toggleVoiceListening}
