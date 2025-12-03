@@ -321,9 +321,9 @@ if __name__ == "__main__":
 
     let system = `You are a code assistant. Return ONLY code, no explanations or markdown.`;
     if (aiMode === 'strict') {
-      system += ` Follow instructions EXACTLY. No extra features.`;
+      system += ` Follow instructions EXACTLY as they are read. No extra features.`;
     } else {
-      system += ` Interpret intent and write complete, useful code.`;
+      system += ` Interpret intent and write complete, useful, working code.`;
     }
 
     let user;
