@@ -75,3 +75,11 @@ Then restart the dev server. When enabled, the editor will show an "LLM: Enabled
 **This is just the start.**
 
 The plan is to turn this into a full AI-poIred development environment that can understand your coding style, explain your bugs, and maybe even argue with you about why your variable names are terrible (seriously considering this feature lol).
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## Author
+
+Built by [Aryan Vyahalkar](https://github.com/aryanvx) | [Portfolio](https://aryanvx.github.io/portfolio/)
