@@ -78,7 +78,7 @@ The plan is to turn this into a full AI-poIred development environment that can 
 
 ## License
 
-This project is licensed under the MIT License - see the [MIT license][MIT license] file for details.
+This project is licensed under the MIT License (see for details)
 
 ## Author
 
