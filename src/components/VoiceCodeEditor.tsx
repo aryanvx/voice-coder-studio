@@ -718,6 +718,9 @@ if __name__ == "__main__":
           currentProvider={userProvider}
           currentKey={userApiKey}
         />
+        <div className="text-center py-2 text-xs text-muted-foreground border-t border-border bg-card">
+          © 2025 Aryan Vyahalkar • MIT License
+        </div>
       </div>
     </div>
   );
